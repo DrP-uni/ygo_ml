@@ -8,32 +8,31 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, r2_score
 from scipy import stats
 
-# --- 1. DATA PRE-PROCESSING ENGINE ---
+# 1. data processing engine
 def load_and_prepare_data(csv_path):
     """
-    Cleans the data and focuses on Set, Rarity, and Age (Generalization).
+    Cleans the dataset and focuses on Set, Rarity, and Age (Generalization).
     """
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f"Missing {csv_path}. Please run your scraper first.")
 
     df = pd.read_csv(csv_path)
     
-    # Clean Prices and Dates
+    # clean data (prices and date (aka age))
     df['Price'] = pd.to_numeric(df['Price'], errors='coerce')
     df['Days Since Print'] = pd.to_numeric(df['Days Since Print'], errors='coerce')
     
-    # Remove rows with missing critical data
+    # Remove rows with missing critical data (may be necessary with links of older product with different formatting)
     df = df.dropna(subset=['Price', 'Days Since Print', 'Rarity', 'Card Code'])
 
-    # OUTLIER REMOVAL: Remove extreme price anomalies (Z-Score > 3)
+    # outlier removal
     df = df[np.abs(stats.zscore(df['Price'])) < 3].copy()
 
-    # FEATURE ENGINEERING: Extract Set Prefix (e.g., 'LOB' or 'STOR')
-    # Refined regex to handle different card code formats found in your data
+    # card code
     df['Set_Prefix'] = df['Card Code'].str.extract(r'([A-Z]{3,4})')
     
-    # CATEGORICAL ENCODING: We EXCLUDE 'Card Name' to prevent overfitting
-    # This forces the model to learn via Rarity and Set Prefix
+    # exclude 'Card Name' to prevent overfitting
+    # forces the model to learn via Rarity and Set Prefix
     df_encoded = pd.get_dummies(df, columns=['Rarity', 'Set_Prefix'], drop_first=True)
     
     # Define Target (y) and Features (X)
@@ -43,7 +42,7 @@ def load_and_prepare_data(csv_path):
     
     return train_test_split(X, y, test_size=0.2, random_state=42), X.columns, df
 
-# --- 2. MULTI-MODEL COMPARISON ---
+# 2. models comparision
 def evaluate_models(X_train, X_test, y_train, y_test):
     algorithms = {
         "Linear Regression": LinearRegression(),
@@ -70,7 +69,7 @@ def evaluate_models(X_train, X_test, y_train, y_test):
     
     return performance, fitted_models
 
-# --- 3. PERFORMANCE VISUALIZATION ---
+# 3. performance visualization
 def plot_results(y_test, performance):
     plt.figure(figsize=(10, 6))
     plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'k--', lw=2, label="Perfect Fit")
@@ -85,12 +84,12 @@ def plot_results(y_test, performance):
     plt.grid(True, alpha=0.3)
     plt.show()
 
-# --- 4. EXECUTION ---
+# 4. execution
 if __name__ == "__main__":
     CSV_FILE = "card_data_final.csv"
     
     try:
-        # Step 1: Prep Data (X_columns will be much smaller now)
+        # Step 1: Prep Data 
         (X_train, X_test, y_train, y_test), features, original_df = load_and_prepare_data(CSV_FILE)
         print(f"Model Cleaned. Feature Count Reduced to: {len(features)}")
         
@@ -99,14 +98,12 @@ if __name__ == "__main__":
         
         # Step 3: Diagnostic - See which specific cards are in the test set
         test_indices = X_test.index
-        # Use .loc to match the shuffled indices back to the original labels
         test_comparison = original_df.loc[test_indices].copy()
         
-        # Add the predictions
+        # Add the predictions (can change the results field to print out other model result)
         test_comparison['Predicted'] = results['Gradient Boosting']
         
         print("\n--- Sample of Predictions (True Market Logic) ---")
-        # Now we can safely see the names without an Index Error
         print(test_comparison[['Card Name', 'Card Code', 'Rarity', 'Price', 'Predicted']].head(15))
         # Step 4: Visualize
         plot_results(y_test, results)
